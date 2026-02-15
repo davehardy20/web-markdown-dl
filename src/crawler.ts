@@ -10,6 +10,7 @@ import { Converter } from './converter.js';
 import { ContentFilter } from './filter.js';
 import { MetadataExtractor } from './metadata.js';
 import { ScraperError, type Metadata, type ScrapingResult } from './types.js';
+import { sanitizeUrlForFilename, isPathSafe, PathSecurityError } from './security.js';
 
 /**
  * Configuration options for the crawler
@@ -321,29 +322,11 @@ export class Crawler {
    * Generate a filename for a URL
    */
   private generateFilename(url: string, depth: number): string {
-    let sanitized = url;
-    
-    // Remove protocol
-    sanitized = sanitized.replace(/^https?:\/\//, '');
-    
-    // Remove trailing slashes
-    sanitized = sanitized.replace(/\/+$/, '');
-    
-    // Replace special characters
-    sanitized = sanitized.replace(/[/:?"<>|\\\s]/g, '_');
-    
-    // Replace multiple underscores
-    sanitized = sanitized.replace(/_+/g, '_');
-    
+    const sanitized = sanitizeUrlForFilename(url);
+
     // Add depth prefix for organization
     const depthPrefix = `d${depth}_`;
-    
-    // Limit length
-    const maxLength = 180;
-    if (sanitized.length > maxLength) {
-      sanitized = sanitized.substring(0, maxLength);
-    }
-    
+
     const extension = this.options.format === 'json' ? 'json' : 'md';
     return `${depthPrefix}${sanitized}.${extension}`;
   }
@@ -388,6 +371,13 @@ export class Crawler {
       // Generate output filename
       const filename = this.generateFilename(url, depth);
       const outputPath = `${this.options.outputDir}/${filename}`;
+
+      // Validate output path is within output directory (prevent path traversal)
+      if (!isPathSafe(outputPath, this.options.outputDir)) {
+        throw new PathSecurityError(
+          `Path traversal detected: output path "${outputPath}" resolves outside the output directory`
+        );
+      }
 
       // Prepare output content
       let outputContent: string;

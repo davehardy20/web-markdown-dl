@@ -10,6 +10,7 @@ import { Converter } from './converter.js';
 import { ContentFilter } from './filter.js';
 import { MetadataExtractor } from './metadata.js';
 import { ScraperError, type Metadata, type ScrapingResult } from './types.js';
+import { sanitizeUrlForFilename, isPathSafe, PathSecurityError } from './security.js';
 
 /**
  * Configuration options for batch processing
@@ -142,31 +143,9 @@ export class BatchProcessor {
 
   /**
    * Sanitize a URL to create a valid filename
-   * Removes protocol, replaces special characters with underscores
    */
   sanitizeUrlForFilename(url: string): string {
-    let sanitized = url;
-    
-    // Remove protocol
-    sanitized = sanitized.replace(/^https?:\/\//, '');
-    
-    // Remove trailing slashes
-    sanitized = sanitized.replace(/\/+$/, '');
-    
-    // Replace special characters with underscores
-    // Characters that are problematic in filenames: / : ? * " < > | \ space
-    sanitized = sanitized.replace(/[/:?"<>|\\\s]/g, '_');
-    
-    // Replace multiple consecutive underscores with single
-    sanitized = sanitized.replace(/_+/g, '_');
-    
-    // Limit filename length (leave room for extension)
-    const maxLength = 200;
-    if (sanitized.length > maxLength) {
-      sanitized = sanitized.substring(0, maxLength);
-    }
-    
-    return sanitized;
+    return sanitizeUrlForFilename(url);
   }
 
   /**
@@ -227,6 +206,13 @@ export class BatchProcessor {
       const extension = this.options.format === 'json' ? 'json' : 'md';
       const outputFilename = `${sanitizedUrl}.${extension}`;
       const outputPath = `${this.options.outputDir}/${outputFilename}`;
+
+      // Validate output path is within output directory (prevent path traversal)
+      if (!isPathSafe(outputPath, this.options.outputDir)) {
+        throw new PathSecurityError(
+          `Path traversal detected: output path "${outputPath}" resolves outside the output directory`
+        );
+      }
 
       // Prepare output content
       let outputContent: string;

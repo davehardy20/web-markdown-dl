@@ -91,10 +91,10 @@ export class ContentFilter {
 
       // Successfully parsed - return filtered content
       return {
-        content: article.content,
+        content: article.content ?? null,
         title: article.title ?? null,
         textContent: article.textContent ?? null,
-        length: article.length,
+        length: article.length ?? 0,
         excerpt: article.excerpt ?? null,
         byline: article.byline ?? null,
         dir: article.dir ?? null,
