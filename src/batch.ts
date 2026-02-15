@@ -3,7 +3,7 @@
  * Processes multiple URLs sequentially with configurable delay
  */
 
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, writeFile, mkdir, stat } from 'fs/promises';
 import { dirname } from 'path';
 import { Scraper } from './scraper.js';
 import { Converter } from './converter.js';
@@ -119,11 +119,34 @@ export class BatchProcessor {
   }
 
   /**
+   * Maximum file size for batch input (10MB)
+   */
+  private static readonly MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+  /**
+   * Maximum number of URLs allowed
+   */
+  private static readonly MAX_URL_COUNT = 10000;
+
+  /**
    * Read URLs from input file
    */
   async readUrls(): Promise<string[]> {
+    const stats = await stat(this.options.inputFile);
+    if (stats.size > BatchProcessor.MAX_FILE_SIZE) {
+      throw new Error(
+        `Input file too large: ${stats.size} bytes (max: ${BatchProcessor.MAX_FILE_SIZE} bytes)`
+      );
+    }
+
     const content = await readFile(this.options.inputFile, 'utf-8');
     const lines = content.split('\n');
+    
+    if (lines.length > BatchProcessor.MAX_URL_COUNT) {
+      throw new Error(
+        `Too many URLs: ${lines.length} (max: ${BatchProcessor.MAX_URL_COUNT})`
+      );
+    }
     
     // Filter empty lines and comments
     const urls = lines
