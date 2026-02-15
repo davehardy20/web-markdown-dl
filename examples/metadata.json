@@ -1,0 +1,11 @@
+{
+  "markdown": "# Sample Markdown Output\n\nThis is an example of what `web-markdown-dl` produces...",
+  "metadata": {
+    "title": "Sample Markdown Output",
+    "url": "https://example.com/sample",
+    "author": "Web Markdown DL Team",
+    "siteName": "Example Site",
+    "excerpt": "A clean example of web to markdown conversion.",
+    "timestamp": "2026-02-15T12:00:00.000Z"
+  }
+}
