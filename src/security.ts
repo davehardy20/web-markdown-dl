@@ -1,10 +1,92 @@
 /**
- * Security utilities for path validation and filename sanitization
- * Prevents path traversal attacks (CWE-22)
+ * Security utilities for path validation, filename sanitization, and SSRF protection
+ * Prevents path traversal attacks (CWE-22) and Server-Side Request Forgery (CWE-918)
  */
 
 import { resolve, normalize, basename } from 'path';
 import { access, constants } from 'fs/promises';
+
+/**
+ * Blocked IP patterns for SSRF protection
+ * Includes private IP ranges, loopback, link-local, and cloud metadata services
+ */
+const BLOCKED_IP_PATTERNS = [
+  /^127\./,                           // Loopback (127.0.0.0/8)
+  /^10\./,                            // Private Class A (10.0.0.0/8)
+  /^172\.(1[6-9]|2[0-9]|3[01])\./,   // Private Class B (172.16.0.0/12)
+  /^192\.168\./,                      // Private Class C (192.168.0.0/16)
+  /^169\.254\./,                      // Link-local (169.254.0.0/16)
+  /^0\./,                             // Current network (0.0.0.0/8)
+  /^fc00:/i,                          // IPv6 Unique Local (fc00::/7)
+  /^fe80:/i,                          // IPv6 Link-local (fe80::/10)
+  /^::1/,                             // IPv6 Loopback
+  /^::ffff:127\./,                    // IPv4-mapped IPv6 loopback
+];
+
+/**
+ * Check if an IP address is internal/private
+ * Used for SSRF protection to prevent access to internal network resources
+ *
+ * @param ip - The IP address to check
+ * @returns true if the IP is internal/private
+ */
+export function isInternalIp(ip: string): boolean {
+  return BLOCKED_IP_PATTERNS.some(pattern => pattern.test(ip));
+}
+
+/**
+ * Custom error for SSRF attempt failures
+ */
+export class SsrfError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SsrfError';
+  }
+}
+
+/**
+ * Validate URL for SSRF protection
+ * Checks for internal IPs, localhost, and cloud metadata services
+ *
+ * @param url - The URL to validate
+ * @param allowInternal - Whether to allow internal network access (default: false)
+ * @returns Object with validation result and optional error message
+ */
+export function validateUrlForSsrf(
+  url: string,
+  allowInternal: boolean = false
+): { valid: boolean; error?: string } {
+  try {
+    const parsed = new URL(url);
+
+    // Only allow http and https protocols
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { valid: false, error: `Protocol not allowed: ${parsed.protocol}` };
+    }
+
+    // Check for localhost variants
+    const hostname = parsed.hostname.toLowerCase();
+    if (!allowInternal) {
+      if (hostname === 'localhost' || hostname === '[::1]') {
+        return { valid: false, error: 'localhost access is blocked' };
+      }
+
+      // Check for internal IPs
+      if (isInternalIp(hostname)) {
+        return { valid: false, error: `Internal IP blocked: ${hostname}` };
+      }
+
+      // Block cloud metadata services
+      if (hostname === '169.254.169.254') {
+        return { valid: false, error: 'Cloud metadata service blocked' };
+      }
+    }
+
+    return { valid: true };
+  } catch (error) {
+    return { valid: false, error: `Invalid URL: ${error}` };
+  }
+}
 
 /**
  * Custom error for path validation failures

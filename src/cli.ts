@@ -8,6 +8,7 @@ import { ContentFilter } from './filter.js';
 import { MetadataExtractor } from './metadata.js';
 import { BatchProcessor, formatSummary } from './batch.js';
 import { Crawler, formatCrawlResult } from './crawler.js';
+import { validateUrlForSsrf, SsrfError } from './security.js';
 
 export interface CliOptions {
   url?: string;
@@ -24,6 +25,7 @@ export interface CliOptions {
   limit?: number;
   ignoreRobots?: boolean;
   allowExternal?: boolean;
+  allowInternal?: boolean;
 }
 
 export interface CliResult {
@@ -89,6 +91,15 @@ export async function runCrawl(options: CliOptions): Promise<CliResult> {
     return {
       success: false,
       error: `Error: Invalid URL "${options.url}". Must be a valid http or https URL.`,
+      exitCode: 1,
+    };
+  }
+
+  const ssrfCheck = validateUrlForSsrf(options.url, options.allowInternal);
+  if (!ssrfCheck.valid) {
+    return {
+      success: false,
+      error: `Error: ${ssrfCheck.error}. Use --allow-internal to permit internal network access.`,
       exitCode: 1,
     };
   }
@@ -219,6 +230,16 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
     };
   }
 
+  // SSRF protection check
+  const ssrfCheck = validateUrlForSsrf(options.url, options.allowInternal);
+  if (!ssrfCheck.valid) {
+    return {
+      success: false,
+      error: `Error: ${ssrfCheck.error}. Use --allow-internal to permit internal network access.`,
+      exitCode: 1,
+    };
+  }
+
   const scraper = new Scraper({
     timeout: options.timeout,
     userAgent: options.userAgent,
@@ -328,6 +349,7 @@ export function createProgram(): Command {
     .option('--limit <count>', 'Maximum URLs to crawl (default: 100)', '100')
     .option('--ignore-robots', 'Ignore robots.txt restrictions')
     .option('--allow-external', 'Allow crawling external domains')
+    .option('--allow-internal', 'Allow access to internal IPs and localhost (SSRF risk)')
     .action(async (options) => {
       const cliOptions: CliOptions = {
         url: options.url,
@@ -344,6 +366,7 @@ export function createProgram(): Command {
         limit: parseInt(options.limit, 10),
         ignoreRobots: options.ignoreRobots ?? false,
         allowExternal: options.allowExternal ?? false,
+        allowInternal: options.allowInternal ?? false,
       };
 
       if (cliOptions.format !== 'markdown' && cliOptions.format !== 'json') {

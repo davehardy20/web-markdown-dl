@@ -13,6 +13,9 @@ import {
   buildSafeOutputPath,
   buildSafeOutputPathWithPrefix,
   PathSecurityError,
+  isInternalIp,
+  validateUrlForSsrf,
+  SsrfError,
 } from '../security.js';
 import { mkdtemp, writeFile, rmdir } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -212,6 +215,86 @@ describe('Security Utilities', () => {
       expect(error).toBeInstanceOf(Error);
       expect(error.name).toBe('PathSecurityError');
       expect(error.message).toBe('test message');
+    });
+  });
+
+  describe('isInternalIp', () => {
+    it('should detect loopback addresses', () => {
+      expect(isInternalIp('127.0.0.1')).toBe(true);
+      expect(isInternalIp('127.255.255.255')).toBe(true);
+      expect(isInternalIp('127.0.0.0')).toBe(true);
+    });
+
+    it('should detect private Class A addresses', () => {
+      expect(isInternalIp('10.0.0.1')).toBe(true);
+      expect(isInternalIp('10.255.255.255')).toBe(true);
+    });
+
+    it('should detect private Class B addresses', () => {
+      expect(isInternalIp('172.16.0.1')).toBe(true);
+      expect(isInternalIp('172.31.255.255')).toBe(true);
+    });
+
+    it('should detect private Class C addresses', () => {
+      expect(isInternalIp('192.168.0.1')).toBe(true);
+      expect(isInternalIp('192.168.255.255')).toBe(true);
+    });
+
+    it('should detect link-local addresses', () => {
+      expect(isInternalIp('169.254.0.1')).toBe(true);
+      expect(isInternalIp('169.254.255.255')).toBe(true);
+    });
+
+    it('should detect IPv6 loopback', () => {
+      expect(isInternalIp('::1')).toBe(true);
+    });
+
+    it('should allow public IPs', () => {
+      expect(isInternalIp('8.8.8.8')).toBe(false);
+      expect(isInternalIp('1.1.1.1')).toBe(false);
+      expect(isInternalIp('example.com')).toBe(false);
+    });
+  });
+
+  describe('validateUrlForSsrf', () => {
+    it('should allow valid public URLs', () => {
+      const result = validateUrlForSsrf('https://example.com/page');
+      expect(result.valid).toBe(true);
+    });
+
+    it('should block localhost', () => {
+      const result = validateUrlForSsrf('http://localhost:8080/page');
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('localhost');
+    });
+
+    it('should block loopback IPs', () => {
+      const result = validateUrlForSsrf('http://127.0.0.1/secret');
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('blocked');
+    });
+
+    it('should block private IPs', () => {
+      expect(validateUrlForSsrf('http://10.0.0.1/').valid).toBe(false);
+      expect(validateUrlForSsrf('http://192.168.1.1/').valid).toBe(false);
+      expect(validateUrlForSsrf('http://172.16.0.1/').valid).toBe(false);
+    });
+
+    it('should block cloud metadata service', () => {
+      const result = validateUrlForSsrf('http://169.254.169.254/latest/meta-data/');
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('blocked');
+    });
+
+    it('should block non-http protocols', () => {
+      expect(validateUrlForSsrf('ftp://example.com/file').valid).toBe(false);
+      expect(validateUrlForSsrf('file:///etc/passwd').valid).toBe(false);
+    });
+
+    it('should allow internal IPs with allowInternal flag', () => {
+      expect(validateUrlForSsrf('http://127.0.0.1/', true).valid).toBe(true);
+      expect(validateUrlForSsrf('http://192.168.1.1/', true).valid).toBe(true);
+      expect(validateUrlForSsrf('http://localhost/', true).valid).toBe(true);
     });
   });
 });
