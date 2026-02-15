@@ -1,6 +1,11 @@
 ---
 name: web-markdown-dl
 description: Convert web pages to clean Markdown format. Use when you need to download web content, scrape articles, or convert URLs to markdown. Supports single URLs, batch processing from files, and website crawling with depth control. Triggers on 'convert url to markdown', 'download webpage', 'scrape website', 'batch convert urls', 'crawl website for content'.
+allowed-tools:
+  - bash
+  - Read
+  - Write
+  - skill
 ---
 
 # Web Markdown DL
