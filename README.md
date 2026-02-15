@@ -49,22 +49,39 @@ A powerful CLI tool to download web pages and convert them into clean, readable 
    bun install
    ```
 
-3. Install Playwright browsers:
+3. Build the project:
    ```bash
-   bun x playwright install chromium
+   bun run build
+   ```
+
+4. Install Playwright browsers:
+   ```bash
+   bunx playwright install chromium
    ```
 
 ## Quick Start
 
-Convert a single URL to Markdown and print it to the console:
+### Using the Compiled Binary (Recommended)
+
+After building, use the compiled binary directly:
 
 ```bash
-bun run src/index.ts --url https://example.com
+# Convert a URL and print to console
+./bin/web-markdown-dl --url https://example.com
+
+# Convert and save to file with content filtering
+./bin/web-markdown-dl --url https://example.com --output example.md --filter
 ```
 
-Convert and save to a file with content filtering enabled:
+### Using Bun (Development)
+
+Or run directly with Bun (useful during development):
 
 ```bash
+# Convert a URL and print to console
+bun run src/index.ts --url https://example.com
+
+# Convert and save to file with content filtering
 bun run src/index.ts --url https://example.com --output example.md --filter
 ```
 
@@ -75,14 +92,17 @@ bun run src/index.ts --url https://example.com --output example.md --filter
 Download a page and convert it to clean Markdown.
 
 ```bash
-# Basic usage
-bun run src/index.ts --url https://news.ycombinator.com
+# Basic usage (using binary)
+./bin/web-markdown-dl --url https://news.ycombinator.com
 
 # Save to file
-bun run src/index.ts --url https://example.com/article -o article.md
+./bin/web-markdown-dl --url https://example.com/article -o article.md
 
 # Save as JSON with metadata
-bun run src/index.ts --url https://example.com/article -f json -o article.json
+./bin/web-markdown-dl --url https://example.com/article -f json -o article.json
+
+# Using bun run (development)
+bun run src/index.ts --url https://example.com/article -o article.md
 ```
 
 ### Batch Processing
@@ -90,6 +110,10 @@ bun run src/index.ts --url https://example.com/article -f json -o article.json
 Convert a list of URLs from a file. Each URL should be on a new line.
 
 ```bash
+# Using binary
+./bin/web-markdown-dl --input-file urls.txt --output-dir ./downloads --filter
+
+# Using bun run (development)
 bun run src/index.ts --input-file urls.txt --output-dir ./downloads --filter
 ```
 
@@ -98,11 +122,14 @@ bun run src/index.ts --input-file urls.txt --output-dir ./downloads --filter
 Recursively crawl a website and convert found pages.
 
 ```bash
-# Crawl up to depth 2 (default)
-bun run src/index.ts --url https://docs.example.com --crawl --output-dir ./docs
+# Crawl up to depth 2 (default) - using binary
+./bin/web-markdown-dl --url https://docs.example.com --crawl --output-dir ./docs
 
 # Limit number of pages and crawl external domains
-bun run src/index.ts --url https://blog.example.com --crawl --limit 50 --allow-external --output-dir ./blog
+./bin/web-markdown-dl --url https://blog.example.com --crawl --limit 50 --allow-external --output-dir ./blog
+
+# Using bun run (development)
+bun run src/index.ts --url https://docs.example.com --crawl --output-dir ./docs
 ```
 
 ## CLI Reference
@@ -129,6 +156,10 @@ bun run src/index.ts --url https://blog.example.com --crawl --limit 50 --allow-e
 The tool primarily uses CLI flags for configuration. For persistent settings, you can alias the command in your shell:
 
 ```bash
+# Using the binary (recommended for daily use)
+alias webmd='/path/to/web_markdown_dl/bin/web-markdown-dl --filter --timeout 60000'
+
+# Or using bun (for development)
 alias webmd='bun run /path/to/web_markdown_dl/src/index.ts --filter --timeout 60000'
 ```
 
@@ -137,7 +168,7 @@ alias webmd='bun run /path/to/web_markdown_dl/src/index.ts --filter --timeout 60
 ### Playwright Error: "Executable doesn't exist"
 If you see an error about missing browser executables, run:
 ```bash
-bun x playwright install chromium
+bunx playwright install chromium
 ```
 
 ### Content is missing or "Access Denied"
