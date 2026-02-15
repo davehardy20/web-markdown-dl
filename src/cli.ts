@@ -394,6 +394,17 @@ export function createProgram(): Command {
         process.exit(1);
       }
 
+      if (cliOptions.ignoreRobots) {
+        console.error('⚠️  WARNING: --ignore-robots bypasses website restrictions.');
+        console.error('   Ensure you have permission to scrape these sites.');
+        console.error('   Unauthorized scraping may violate Terms of Service.');
+      }
+
+      if (cliOptions.allowExternal) {
+        console.error('⚠️  WARNING: --allow-external will crawl external domains.');
+        console.error('   This may include third-party sites outside your control.');
+      }
+
       const result = await runCli(cliOptions);
 
       if (!result.success) {
