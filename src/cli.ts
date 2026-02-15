@@ -26,6 +26,7 @@ export interface CliOptions {
   ignoreRobots?: boolean;
   allowExternal?: boolean;
   allowInternal?: boolean;
+  overwrite?: boolean;
 }
 
 export interface CliResult {
@@ -116,6 +117,7 @@ export async function runCrawl(options: CliOptions): Promise<CliResult> {
     userAgent: options.userAgent,
     respectRobots: !options.ignoreRobots,
     stayWithinDomain: !options.allowExternal,
+    overwrite: options.overwrite,
   });
 
   crawler.onProgress((current, total, url, depth) => {
@@ -173,6 +175,7 @@ export async function runBatch(options: CliOptions): Promise<CliResult> {
     timeout: options.timeout,
     userAgent: options.userAgent,
     filter: options.filter,
+    overwrite: options.overwrite,
   });
 
   batchProcessor.onProgress((current, total, url) => {
@@ -350,6 +353,7 @@ export function createProgram(): Command {
     .option('--ignore-robots', 'Ignore robots.txt restrictions')
     .option('--allow-external', 'Allow crawling external domains')
     .option('--allow-internal', 'Allow access to internal IPs and localhost (SSRF risk)')
+    .option('--force', 'Overwrite existing files without warning')
     .action(async (options) => {
       const cliOptions: CliOptions = {
         url: options.url,
@@ -367,6 +371,7 @@ export function createProgram(): Command {
         ignoreRobots: options.ignoreRobots ?? false,
         allowExternal: options.allowExternal ?? false,
         allowInternal: options.allowInternal ?? false,
+        overwrite: options.force ?? false,
       };
 
       if (cliOptions.format !== 'markdown' && cliOptions.format !== 'json') {

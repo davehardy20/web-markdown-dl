@@ -10,7 +10,7 @@ import { Converter } from './converter.js';
 import { ContentFilter } from './filter.js';
 import { MetadataExtractor } from './metadata.js';
 import { ScraperError, type Metadata, type ScrapingResult } from './types.js';
-import { sanitizeUrlForFilename, isPathSafe, PathSecurityError } from './security.js';
+import { sanitizeUrlForFilename, isPathSafe, PathSecurityError, fileExists } from './security.js';
 
 /**
  * Configuration options for the crawler
@@ -40,6 +40,8 @@ export interface CrawlOptions {
   userAgent?: string;
   /** User agent to use for robots.txt checks (defaults to userAgent) */
   robotsUserAgent?: string;
+  /** Overwrite existing files without warning */
+  overwrite?: boolean;
 }
 
 /**
@@ -57,6 +59,7 @@ export const DEFAULT_CRAWL_OPTIONS: Required<Omit<CrawlOptions, 'startUrl'>> = {
   timeout: 30000,
   userAgent: 'web-markdown-dl/1.0',
   robotsUserAgent: 'web-markdown-dl/1.0',
+  overwrite: false,
 };
 
 /**
@@ -389,6 +392,18 @@ export class Crawler {
         outputContent = JSON.stringify(scrapingResult, null, 2);
       } else {
         outputContent = markdown;
+      }
+
+      // Check if file exists and respect overwrite option
+      const exists = await fileExists(outputPath);
+      if (exists && !this.options.overwrite) {
+        console.error(`Skipping ${url}: file already exists (use --force to overwrite)`);
+        return {
+          url,
+          depth,
+          success: true,
+          outputFile: outputPath,
+        };
       }
 
       // Write output file

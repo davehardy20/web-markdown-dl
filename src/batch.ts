@@ -10,7 +10,7 @@ import { Converter } from './converter.js';
 import { ContentFilter } from './filter.js';
 import { MetadataExtractor } from './metadata.js';
 import { ScraperError, type Metadata, type ScrapingResult } from './types.js';
-import { sanitizeUrlForFilename, isPathSafe, PathSecurityError } from './security.js';
+import { sanitizeUrlForFilename, isPathSafe, PathSecurityError, fileExists } from './security.js';
 
 /**
  * Configuration options for batch processing
@@ -224,6 +224,17 @@ export class BatchProcessor {
         outputContent = JSON.stringify(scrapingResult, null, 2);
       } else {
         outputContent = markdown;
+      }
+
+      // Check if file exists and respect overwrite option
+      const exists = await fileExists(outputPath);
+      if (exists && !this.options.overwrite) {
+        console.error(`Skipping ${url}: file already exists (use --force to overwrite)`);
+        return {
+          url,
+          success: true,
+          outputFile: outputPath,
+        };
       }
 
       // Write output file
