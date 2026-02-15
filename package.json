@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "web-md": "./bin/web-md.js"
+    "web-markdown-dl": "./bin/web-markdown-dl"
   },
   "scripts": {
     "build": "tsc",
@@ -30,8 +30,9 @@
     "jsdom": "^25.0.1"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
     "@types/jsdom": "^21.1.7",
+    "@types/node": "^22.10.0",
+    "@types/turndown": "^5.0.6",
     "typescript": "^5.7.2"
   }
 }
