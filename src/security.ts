@@ -182,11 +182,23 @@ export function sanitizeFilename(name: string): string {
  * @returns A safe filename derived from the URL
  */
 export function sanitizeUrlForFilename(url: string): string {
+  const lowerUrl = url.toLowerCase();
+  
   // Check for path traversal attempts in the original URL
-  if (url.includes('..') || url.includes('%2e')) {
-    throw new PathSecurityError(
-      `Path traversal detected in URL: "${url}"`
-    );
+  // Includes double-encoded and triple-encoded variants for defense-in-depth
+  const traversalPatterns = [
+    '..',           // Direct traversal
+    '%2e',          // Single-encoded dot
+    '%252e',        // Double-encoded dot
+    '%25252e',      // Triple-encoded dot
+  ];
+  
+  for (const pattern of traversalPatterns) {
+    if (lowerUrl.includes(pattern)) {
+      throw new PathSecurityError(
+        `Path traversal detected in URL: "${url}"`
+      );
+    }
   }
 
   let sanitized = url;
@@ -229,11 +241,23 @@ export async function fileExists(path: string): Promise<boolean> {
  * @throws PathSecurityError if path traversal is detected
  */
 export function validateOutputPath(filename: string, baseDir: string): string {
+  const lowerFilename = filename.toLowerCase();
+  
   // Check for path traversal attempts in the original filename
-  if (filename.includes('..') || filename.includes('%2e')) {
-    throw new PathSecurityError(
-      `Path traversal detected in filename: "${filename}"`
-    );
+  // Includes double-encoded and triple-encoded variants for defense-in-depth
+  const traversalPatterns = [
+    '..',           // Direct traversal
+    '%2e',          // Single-encoded dot
+    '%252e',        // Double-encoded dot
+    '%25252e',      // Triple-encoded dot
+  ];
+  
+  for (const pattern of traversalPatterns) {
+    if (lowerFilename.includes(pattern)) {
+      throw new PathSecurityError(
+        `Path traversal detected in filename: "${filename}"`
+      );
+    }
   }
 
   // Sanitize the filename first

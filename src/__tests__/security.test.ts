@@ -133,6 +133,21 @@ describe('Security Utilities', () => {
       expect(sanitizeUrlForFilename('example.com/path?query=1')).toBe('example.com_path_query_1');
       expect(sanitizeUrlForFilename('example.com/page#section')).toBe('example.com_page_section');
     });
+
+    it('should block single-encoded path traversal', () => {
+      expect(() => sanitizeUrlForFilename('example.com/%2e%2e/etc/passwd')).toThrow(PathSecurityError);
+      expect(() => sanitizeUrlForFilename('example.com/%2E%2E/etc/passwd')).toThrow(PathSecurityError);
+    });
+
+    it('should block double-encoded path traversal', () => {
+      expect(() => sanitizeUrlForFilename('example.com/%252e%252e%252fetc%252fpasswd')).toThrow(PathSecurityError);
+      expect(() => sanitizeUrlForFilename('example.com/%252E%252E/etc/passwd')).toThrow(PathSecurityError);
+    });
+
+    it('should block triple-encoded path traversal', () => {
+      expect(() => sanitizeUrlForFilename('example.com/%25252e%25252e/etc/passwd')).toThrow(PathSecurityError);
+      expect(() => sanitizeUrlForFilename('example.com/%25252E%25252E/etc/passwd')).toThrow(PathSecurityError);
+    });
   });
 
   describe('fileExists', () => {
@@ -167,6 +182,21 @@ describe('Security Utilities', () => {
     it('should sanitize filename before validation', () => {
       const result = validateOutputPath('file<>name.md', '/output');
       expect(result).toContain('file_name.md');
+    });
+
+    it('should throw PathSecurityError for single-encoded traversal', () => {
+      expect(() => validateOutputPath('%2e%2e/etc/passwd', '/output')).toThrow(PathSecurityError);
+      expect(() => validateOutputPath('%2E%2E%2Fetc%2Fpasswd', '/output')).toThrow(PathSecurityError);
+    });
+
+    it('should throw PathSecurityError for double-encoded traversal', () => {
+      expect(() => validateOutputPath('%252e%252e/etc/passwd', '/output')).toThrow(PathSecurityError);
+      expect(() => validateOutputPath('%252E%252E%252fetc%252fpasswd', '/output')).toThrow(PathSecurityError);
+    });
+
+    it('should throw PathSecurityError for triple-encoded traversal', () => {
+      expect(() => validateOutputPath('%25252e%25252e/etc/passwd', '/output')).toThrow(PathSecurityError);
+      expect(() => validateOutputPath('%25252E%25252E/etc/passwd', '/output')).toThrow(PathSecurityError);
     });
   });
 
