@@ -16,6 +16,11 @@ import { UrlProcessor } from './utils/url-processor.js';
 import { normalizeUrl, extractDomain } from './utils/url.js';
 
 /**
+ * Maximum number of robots.txt entries to cache (LRU eviction)
+ */
+const MAX_ROBOTS_CACHE_SIZE = 100;
+
+/**
  * Configuration options for the crawler
  */
 export interface CrawlOptions {
@@ -238,20 +243,23 @@ export class Crawler {
 
   /**
    * Fetch and parse robots.txt for a domain
+   * Uses LRU cache with max 100 entries to prevent unbounded memory growth
    */
   private async getRobots(url: string): Promise<ReturnType<typeof robotsParser> | null> {
     const domain = extractDomain(url);
     if (!domain) return null;
 
-    // Check cache first
+    // LRU: on cache hit, move to end (most recently used)
     if (this.robotsCache.has(domain)) {
-      return this.robotsCache.get(domain)!;
+      const cached = this.robotsCache.get(domain)!;
+      this.robotsCache.delete(domain);
+      this.robotsCache.set(domain, cached);
+      return cached;
     }
 
     const robotsUrl = `https://${domain}/robots.txt`;
     
     try {
-      // Use a separate scraper instance for robots.txt to avoid context issues
       const robotsScraper = new Scraper({
         timeout: 5000,
         userAgent: this.options.userAgent,
@@ -262,18 +270,30 @@ export class Crawler {
       
       if (result.statusCode === 200) {
         const robots = robotsParser(robotsUrl, result.html);
+        this.evictLruIfNeeded();
         this.robotsCache.set(domain, robots);
         return robots;
       }
     } catch (error) {
-      // If robots.txt doesn't exist or fails, assume everything is allowed
       console.error(`No robots.txt found for ${domain}, proceeding with crawl`);
     }
 
-    // No robots.txt means everything is allowed
     const allowAll = robotsParser(robotsUrl, '');
+    this.evictLruIfNeeded();
     this.robotsCache.set(domain, allowAll);
     return allowAll;
+  }
+
+  /**
+   * Evict least recently used entry if cache is at capacity
+   */
+  private evictLruIfNeeded(): void {
+    if (this.robotsCache.size >= MAX_ROBOTS_CACHE_SIZE) {
+      const oldestKey = this.robotsCache.keys().next().value;
+      if (oldestKey) {
+        this.robotsCache.delete(oldestKey);
+      }
+    }
   }
 
   /**
