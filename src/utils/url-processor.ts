@@ -11,6 +11,10 @@ export interface UrlProcessorOptions {
   format?: 'markdown' | 'json';
   outputDir: string;
   overwrite?: boolean;
+  /** Include raw HTML in result for caching (e.g., for link extraction) */
+  includeHtml?: boolean;
+  /** Prefix to add to the filename (e.g., depth indicator like "d1_") */
+  filenamePrefix?: string;
 }
 
 export interface UrlProcessorResult {
@@ -19,6 +23,8 @@ export interface UrlProcessorResult {
   outputFile?: string;
   error?: string;
   metadata?: Metadata;
+  /** Raw HTML content, only included when includeHtml option is true */
+  html?: string;
 }
 
 export class UrlProcessor {
@@ -52,7 +58,7 @@ export class UrlProcessor {
       if (filterMetadata?.byline && !metadata.author) {
         metadata.author = filterMetadata.byline;
       }
-      const filename = this.buildFilename(scrapeResult.url, options.format);
+      const filename = this.buildFilename(scrapeResult.url, options.format, options.filenamePrefix);
       const outputContent = this.prepareOutputContent(markdown, metadata, options.format);
       const writeResult = await this.fileWriter.write(filename, outputContent, {
         overwrite: options.overwrite,
@@ -62,6 +68,7 @@ export class UrlProcessor {
         url,
         outputFile: writeResult.path,
         metadata,
+        html: options.includeHtml ? scrapeResult.html : undefined,
       };
     } catch (error) {
       return {
@@ -72,10 +79,11 @@ export class UrlProcessor {
     }
   }
 
-  private buildFilename(url: string, format?: string): string {
+  private buildFilename(url: string, format?: string, prefix?: string): string {
     const sanitized = sanitizeUrlForFilename(url);
     const extension = format === 'json' ? 'json' : 'md';
-    return `${sanitized}.${extension}`;
+    const prefixStr = prefix ? `${prefix}_` : '';
+    return `${prefixStr}${sanitized}.${extension}`;
   }
 
   private prepareOutputContent(

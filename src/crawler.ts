@@ -12,6 +12,7 @@ import { MetadataExtractor } from './metadata.js';
 import { ScraperError, type Metadata, type ScrapingResult } from './types.js';
 import { sanitizeUrlForFilename, isPathSafe, PathSecurityError, fileExists } from './security.js';
 import { FileWriter } from './utils/file-writer.js';
+import { UrlProcessor } from './utils/url-processor.js';
 
 /**
  * Configuration options for the crawler
@@ -222,11 +223,11 @@ export function extractLinks(html: string, baseUrl: string): string[] {
 export class Crawler {
   private options: Required<CrawlOptions>;
   private scraper: Scraper;
-  private converter: Converter;
   private visited: Set<string> = new Set();
   private robotsCache: Map<string, ReturnType<typeof robotsParser>> = new Map();
   private progressCallback?: CrawlProgressCallback;
   private errorCallback?: CrawlErrorCallback;
+  private urlProcessor: UrlProcessor;
 
   constructor(options: CrawlOptions) {
     this.options = {
@@ -237,7 +238,19 @@ export class Crawler {
       timeout: this.options.timeout,
       userAgent: this.options.userAgent,
     });
-    this.converter = new Converter();
+
+    const converter = new Converter();
+    const filter = new ContentFilter();
+    const metadataExtractor = new MetadataExtractor();
+    const fileWriter = new FileWriter(this.options.outputDir);
+
+    this.urlProcessor = new UrlProcessor(
+      this.scraper,
+      converter,
+      filter,
+      metadataExtractor,
+      fileWriter
+    );
   }
 
   /**
@@ -338,91 +351,39 @@ export class Crawler {
   }
 
   /**
-   * Process a single URL: scrape, convert, and save
+   * Process a single URL using UrlProcessor
    * Returns HTML for caching (max 5MB) to avoid double-scraping during link extraction
    */
   private async processUrl(url: string, depth: number): Promise<CrawledPage> {
-    try {
-      // Scrape the page
-      const result = await this.scraper.scrape(url);
+    const result = await this.urlProcessor.process(url, {
+      filter: this.options.filter,
+      format: this.options.format,
+      outputDir: this.options.outputDir,
+      overwrite: this.options.overwrite,
+      includeHtml: true,
+      filenamePrefix: `d${depth}`,
+    });
 
-      let htmlToConvert = result.html;
-      let filterMetadata = { filtered: false, author: null as string | null };
-
-      // Apply content filtering if enabled
-      if (this.options.filter) {
-        const contentFilter = new ContentFilter();
-        const filterResult = contentFilter.filterWithFallback(result.html, result.url);
-        htmlToConvert = filterResult.html;
-        filterMetadata = {
-          filtered: filterResult.metadata.success,
-          author: filterResult.metadata.byline,
-        };
-
-        if (!filterResult.metadata.success) {
-          console.error(`Warning: Content filtering failed for ${url}`);
-        }
-      }
-
-      // Convert to markdown
-      const markdown = this.converter.convert(htmlToConvert);
-
-      // Extract metadata
-      const metadataExtractor = new MetadataExtractor();
-      const metadata = metadataExtractor.extract(htmlToConvert, result.url, markdown);
-
-      if (filterMetadata.author && !metadata.author) {
-        metadata.author = filterMetadata.author;
-      }
-
-      // Generate output filename
-      const filename = this.generateFilename(url, depth);
-
-      // Prepare output content
-      let outputContent: string;
-      if (this.options.format === 'json') {
-        const scrapingResult: ScrapingResult = {
-          markdown,
-          metadata,
-        };
-        outputContent = JSON.stringify(scrapingResult, null, 2);
-      } else {
-        outputContent = markdown;
-      }
-
-      // Use FileWriter for file operations
-      const fileWriter = new FileWriter(this.options.outputDir);
-      const writeResult = await fileWriter.write(filename, outputContent, {
-        overwrite: this.options.overwrite,
-      });
-
-      if (writeResult.skipped) {
-        console.error(`Skipping ${url}: file already exists (use --force to overwrite)`);
-      }
-
-      // Cache HTML for link extraction, but only if under 5MB (memory safety)
-      const MAX_CACHED_HTML_SIZE = 5 * 1024 * 1024; // 5MB
-      const shouldCacheHtml = result.html.length <= MAX_CACHED_HTML_SIZE;
-
-      return {
-        url,
-        depth,
-        success: true,
-        outputFile: writeResult.path,
-        html: shouldCacheHtml ? result.html : undefined,
-      };
-    } catch (error: unknown) {
-      const errorMessage = error instanceof ScraperError
-        ? error.message
-        : (error as Error).message;
-
+    if (!result.success) {
       return {
         url,
         depth,
         success: false,
-        error: errorMessage,
+        error: result.error,
       };
     }
+
+    // Cache HTML for link extraction, but only if under 5MB (memory safety)
+    const MAX_CACHED_HTML_SIZE = 5 * 1024 * 1024; // 5MB
+    const shouldCacheHtml = result.html && result.html.length <= MAX_CACHED_HTML_SIZE;
+
+    return {
+      url,
+      depth,
+      success: true,
+      outputFile: result.outputFile,
+      html: shouldCacheHtml ? result.html : undefined,
+    };
   }
 
   /**
