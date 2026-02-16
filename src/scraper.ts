@@ -21,9 +21,17 @@ function isValidContentType(contentType: string | null | undefined): boolean {
   return validTypes.includes(normalizedType);
 }
 
+interface PooledContext {
+  context: BrowserContext;
+  inUse: boolean;
+}
+
 export class Scraper {
   private options: Required<ScraperOptions>;
   private browser: Browser | null = null;
+  private contextPool: PooledContext[] = [];
+  private maxContexts = 5;
+  private poolMutex = Promise.resolve();
 
   constructor(options: ScraperOptions = {}) {
     this.options = {
@@ -60,18 +68,76 @@ export class Scraper {
     }
   }
 
-  async scrape(url: string): Promise<ScraperResult> {
-    const browser = await this.ensureBrowser();
+  private async acquireMutexAndGetContext(): Promise<BrowserContext> {
+    const availableContext = this.contextPool.find(c => !c.inUse);
+    if (availableContext) {
+      availableContext.inUse = true;
+      await this.clearContextStorage(availableContext.context);
+      return availableContext.context;
+    }
 
+    if (this.contextPool.length < this.maxContexts) {
+      const browser = await this.ensureBrowser();
+      const context = await browser.newContext({
+        userAgent: this.options.userAgent,
+      });
+      this.contextPool.push({ context, inUse: true });
+      return context;
+    }
+
+    return new Promise((resolve, reject) => {
+      const checkInterval = setInterval(async () => {
+        const ctx = this.contextPool.find(c => !c.inUse);
+        if (ctx) {
+          clearInterval(checkInterval);
+          ctx.inUse = true;
+          await this.clearContextStorage(ctx.context);
+          resolve(ctx.context);
+        }
+      }, 50);
+
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        reject(new Error('Timeout waiting for available context'));
+      }, 30000);
+    });
+  }
+
+  private async getContext(): Promise<BrowserContext> {
+    const acquirePromise = this.poolMutex.then(() => this.acquireMutexAndGetContext());
+    this.poolMutex = acquirePromise.then(() => undefined, () => undefined);
+    return acquirePromise;
+  }
+
+  private releaseContext(context: BrowserContext): void {
+    const pooledContext = this.contextPool.find(c => c.context === context);
+    if (pooledContext) {
+      pooledContext.inUse = false;
+    }
+  }
+
+  private async clearContextStorage(context: BrowserContext): Promise<void> {
+    try {
+      await context.clearCookies();
+      const pages = context.pages();
+      for (const page of pages) {
+        await page.evaluate(() => {
+          localStorage.clear();
+          sessionStorage.clear();
+        }).catch(() => {});
+      }
+    } catch {
+      // Ignore errors during cleanup - context might be closed
+    }
+  }
+
+  async scrape(url: string): Promise<ScraperResult> {
     const performScrape = async (): Promise<ScraperResult> => {
       let context: BrowserContext | null = null;
       let page: Page | null = null;
 
       try {
-        context = await browser.newContext({
-          userAgent: this.options.userAgent,
-        });
-
+        context = await this.getContext();
         page = await context.newPage();
 
         const response = await page.goto(url, {
@@ -115,7 +181,7 @@ export class Scraper {
           await page.close().catch(() => {});
         }
         if (context) {
-          await context.close().catch(() => {});
+          this.releaseContext(context);
         }
       }
     };
@@ -156,6 +222,15 @@ export class Scraper {
   }
 
   async close(): Promise<void> {
+    await Promise.all(
+      this.contextPool.map(async (pooled) => {
+        try {
+          await pooled.context.close();
+        } catch {}
+      })
+    );
+    this.contextPool = [];
+    
     if (this.browser) {
       await this.browser.close().catch(() => {});
       this.browser = null;
