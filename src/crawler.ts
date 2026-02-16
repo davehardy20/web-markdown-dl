@@ -13,6 +13,7 @@ import { ScraperError, type Metadata, type ScrapingResult } from './types.js';
 import { sanitizeUrlForFilename, isPathSafe, PathSecurityError, fileExists } from './security.js';
 import { FileWriter } from './utils/file-writer.js';
 import { UrlProcessor } from './utils/url-processor.js';
+import { normalizeUrl, extractDomain } from './utils/url.js';
 
 /**
  * Configuration options for the crawler
@@ -117,58 +118,12 @@ export type CrawlProgressCallback = (current: number, total: number, url: string
 export type CrawlErrorCallback = (url: string, error: string) => void;
 
 /**
- * Normalize a URL for deduplication
- * - Removes fragment
- * - Sorts query parameters
- * - Removes trailing slash (except for root)
- */
-export function normalizeUrl(url: string): string {
-  try {
-    const parsed = new URL(url);
-    
-    parsed.hash = '';
-    
-    const params = parsed.searchParams;
-    const sortedParams = new URLSearchParams();
-    const uniqueKeys = [...new Set(Array.from(params.keys()))].sort();
-    for (const key of uniqueKeys) {
-      const values = params.getAll(key);
-      for (const value of values) {
-        sortedParams.append(key, value);
-      }
-    }
-    parsed.search = sortedParams.toString();
-    
-    if (parsed.pathname !== '/' && parsed.pathname.endsWith('/')) {
-      parsed.pathname = parsed.pathname.slice(0, -1);
-    }
-    
-    return parsed.href;
-  } catch {
-    return url;
-  }
-}
-
-/**
- * Extract the domain from a URL (hostname without port)
- */
-export function extractDomain(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    return parsed.hostname;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Resolve a relative URL against a base URL
  */
 export function resolveUrl(base: string, relative: string): string | null {
   try {
     const baseUrl = new URL(base);
     const resolved = new URL(relative, baseUrl);
-    // Only allow http and https protocols
     if (resolved.protocol !== 'http:' && resolved.protocol !== 'https:') {
       return null;
     }

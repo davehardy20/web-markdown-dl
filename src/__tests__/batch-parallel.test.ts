@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from 'bun:test';
 import { BatchProcessor, BatchOptions, BatchSummary } from '../batch.js';
+import { groupUrlsByDomain } from '../utils/url.js';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -70,7 +71,7 @@ describe('Domain-Parallel Batch Processing', () => {
         outputDir: tempDir,
       });
 
-      const groups = (processor as any).groupUrlsByDomain(urls);
+      const groups = groupUrlsByDomain(urls);
 
       expect(groups.size).toBe(3);
       expect(groups.get('example.com')).toHaveLength(2);
@@ -93,7 +94,7 @@ describe('Domain-Parallel Batch Processing', () => {
         outputDir: tempDir,
       });
 
-      const groups = (processor as any).groupUrlsByDomain(urls);
+      const groups = groupUrlsByDomain(urls);
 
       expect(groups.size).toBe(3);
       expect(groups.get('example.com')).toHaveLength(1);
@@ -116,7 +117,7 @@ describe('Domain-Parallel Batch Processing', () => {
         outputDir: tempDir,
       });
 
-      const groups = (processor as any).groupUrlsByDomain(urls);
+      const groups = groupUrlsByDomain(urls);
 
       expect(groups.size).toBe(2);
       expect(groups.get('example.com')).toHaveLength(1);

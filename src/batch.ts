@@ -12,6 +12,7 @@ import { ScraperError, type ScrapingResult } from './types.js';
 import { sanitizeUrlForFilename, isPathSafe, PathSecurityError, fileExists, validateUrlForSsrf } from './security.js';
 import { FileWriter } from './utils/file-writer.js';
 import { UrlProcessor } from './utils/url-processor.js';
+import { extractDomain, groupUrlsByDomain } from './utils/url.js';
 
 /**
  * Configuration options for batch processing
@@ -252,35 +253,6 @@ export class BatchProcessor {
   }
 
   /**
-   * Extract domain from URL for grouping
-   */
-  private extractDomain(url: string): string | null {
-    try {
-      const parsed = new URL(url);
-      return parsed.hostname;
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Group URLs by their domain
-   */
-  private groupUrlsByDomain(urls: string[]): Map<string, string[]> {
-    const groups = new Map<string, string[]>();
-    for (const url of urls) {
-      const domain = this.extractDomain(url);
-      if (!domain) continue;
-      
-      if (!groups.has(domain)) {
-        groups.set(domain, []);
-      }
-      groups.get(domain)!.push(url);
-    }
-    return groups;
-  }
-
-  /**
    * Process a single domain sequentially (maintains politeness)
    * @param domain Domain name being processed
    * @param urls List of URLs to process for this domain
@@ -371,7 +343,7 @@ export class BatchProcessor {
     }
 
     // Group URLs by domain
-    const domainGroups = this.groupUrlsByDomain(urls);
+    const domainGroups = groupUrlsByDomain(urls);
     
     // Convert to array for batch processing
     const domainEntries = Array.from(domainGroups.entries());

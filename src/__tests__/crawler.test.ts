@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import {
   Crawler,
-  normalizeUrl,
-  extractDomain,
   resolveUrl,
   isSameDomain,
   extractLinks,
@@ -11,6 +9,10 @@ import {
   type CrawlOptions,
   type CrawlResult,
 } from '../crawler';
+import {
+  normalizeUrl,
+  extractDomain,
+} from '../utils/url';
 
 class MockTimeoutError extends Error {
   constructor(message: string) {
