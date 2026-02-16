@@ -4,13 +4,13 @@
  */
 
 import { readFile, writeFile, mkdir, stat } from 'fs/promises';
-import { dirname } from 'path';
 import { Scraper } from './scraper.js';
 import { Converter } from './converter.js';
 import { ContentFilter } from './filter.js';
 import { MetadataExtractor } from './metadata.js';
-import { ScraperError, type Metadata, type ScrapingResult } from './types.js';
+import { ScraperError, type ScrapingResult } from './types.js';
 import { sanitizeUrlForFilename, isPathSafe, PathSecurityError, fileExists } from './security.js';
+import { FileWriter } from './utils/file-writer.js';
 
 /**
  * Configuration options for batch processing
@@ -282,25 +282,42 @@ export class BatchProcessor {
   }
 
   /**
-   * Run batch processing
+   * Extract domain from URL for grouping
    */
-  async run(): Promise<BatchSummary> {
-    // Ensure output directory exists
-    await this.ensureOutputDir();
-
-    // Read URLs from input file
-    const urls = await this.readUrls();
-
-    if (urls.length === 0) {
-      console.error('No valid URLs found in input file');
-      return {
-        total: 0,
-        completed: 0,
-        failed: 0,
-        failures: [],
-      };
+  private extractDomain(url: string): string | null {
+    try {
+      const parsed = new URL(url);
+      return parsed.hostname;
+    } catch {
+      return null;
     }
+  }
 
+  /**
+   * Group URLs by their domain
+   */
+  private groupUrlsByDomain(urls: string[]): Map<string, string[]> {
+    const groups = new Map<string, string[]>();
+    for (const url of urls) {
+      const domain = this.extractDomain(url);
+      if (!domain) continue;
+      
+      if (!groups.has(domain)) {
+        groups.set(domain, []);
+      }
+      groups.get(domain)!.push(url);
+    }
+    return groups;
+  }
+
+  /**
+   * Process a single domain sequentially (maintains politeness)
+   */
+  private async processDomain(
+    domain: string, 
+    urls: string[], 
+    totalUrls: number
+  ): Promise<BatchSummary> {
     const summary: BatchSummary = {
       total: urls.length,
       completed: 0,
@@ -308,15 +325,11 @@ export class BatchProcessor {
       failures: [],
     };
 
-    // Process URLs sequentially
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i]!;
-      const current = i + 1;
 
-      // Report progress
-      if (this.progressCallback) {
-        this.progressCallback(current, urls.length, url);
-      }
+      // Report progress (current is tracked globally via closure in run())
+      // We'll handle progress callback differently for parallel processing
 
       // Process the URL
       const result = await this.processUrl(url);
@@ -336,16 +349,109 @@ export class BatchProcessor {
         }
       }
 
-      // Add delay between requests (except after last URL)
+      // Add delay between URLs within the same domain (politeness)
       if (i < urls.length - 1 && this.options.delay > 0) {
         await this.sleep(this.options.delay);
       }
     }
 
+    return summary;
+  }
+
+  /**
+   * Merge multiple batch summaries into one
+   */
+  private mergeSummaries(summaries: BatchSummary[]): BatchSummary {
+    return summaries.reduce(
+      (merged, summary) => ({
+        total: merged.total + summary.total,
+        completed: merged.completed + summary.completed,
+        failed: merged.failed + summary.failed,
+        failures: [...merged.failures, ...summary.failures],
+      }),
+      { total: 0, completed: 0, failed: 0, failures: [] }
+    );
+  }
+
+  /**
+   * Run batch processing with domain-parallel execution
+   * Processes up to 5 domains concurrently while maintaining
+   * sequential processing within each domain for politeness.
+   */
+  async run(): Promise<BatchSummary> {
+    // Ensure output directory exists
+    await this.ensureOutputDir();
+
+    // Read URLs from input file
+    const urls = await this.readUrls();
+
+    if (urls.length === 0) {
+      console.error('No valid URLs found in input file');
+      return {
+        total: 0,
+        completed: 0,
+        failed: 0,
+        failures: [],
+      };
+    }
+
+    // Group URLs by domain
+    const domainGroups = this.groupUrlsByDomain(urls);
+    
+    // Convert to array for batch processing
+    const domainEntries = Array.from(domainGroups.entries());
+    
+    // Track overall progress
+    let processedCount = 0;
+    const totalUrlCount = urls.length;
+    
+    // Create a wrapper for progress callback that tracks global progress
+    const originalProgressCallback = this.progressCallback;
+    const domainProgressCallbacks = new Map<string, ProgressCallback>();
+    
+    if (originalProgressCallback) {
+      // Create a per-domain progress tracker that calls the global callback
+      for (const [domain] of domainEntries) {
+        domainProgressCallbacks.set(domain, () => {
+          processedCount++;
+          originalProgressCallback(processedCount, totalUrlCount, domain);
+        });
+      }
+    }
+
+    // Process domains with concurrency limit
+    const MAX_CONCURRENT_DOMAINS = 5;
+    const results: BatchSummary[] = [];
+
+    for (let i = 0; i < domainEntries.length; i += MAX_CONCURRENT_DOMAINS) {
+      const batch = domainEntries.slice(i, i + MAX_CONCURRENT_DOMAINS);
+      
+      // Process batch of domains in parallel
+      const batchPromises = batch.map(async ([domain, domainUrls]) => {
+        const result = await this.processDomain(domain, domainUrls, totalUrlCount);
+        
+        // Update progress for each URL in this domain
+        if (originalProgressCallback) {
+          for (let j = 0; j < domainUrls.length; j++) {
+            processedCount++;
+            originalProgressCallback(processedCount, totalUrlCount, domainUrls[j]!);
+          }
+        }
+        
+        return result;
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      results.push(...batchResults);
+    }
+
+    // Merge all summaries
+    const finalSummary = this.mergeSummaries(results);
+
     // Close browser
     await this.scraper.close();
 
-    return summary;
+    return finalSummary;
   }
 
   /**
