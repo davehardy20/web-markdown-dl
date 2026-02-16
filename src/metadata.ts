@@ -4,29 +4,33 @@ import type { Metadata, Heading, Link } from './types.js';
 export class MetadataExtractor {
   extract(html: string, url: string, markdown: string = ''): Metadata {
     const dom = new JSDOM(html);
-    const doc = dom.window.document;
+    try {
+      const doc = dom.window.document;
 
-    const title = this.extractTitle(doc);
-    const description = this.extractDescription(doc);
-    const author = this.extractAuthor(doc);
-    const publishedDate = this.extractPublishedDate(doc);
-    const headings = this.extractHeadings(doc);
-    const links = this.extractLinks(doc);
-    const wordCount = this.countWords(markdown || doc.body?.textContent || '');
-    const contentType = this.extractContentType(doc);
+      const title = this.extractTitle(doc);
+      const description = this.extractDescription(doc);
+      const author = this.extractAuthor(doc);
+      const publishedDate = this.extractPublishedDate(doc);
+      const headings = this.extractHeadings(doc);
+      const links = this.extractLinks(doc);
+      const wordCount = this.countWords(markdown || doc.body?.textContent || '');
+      const contentType = this.extractContentType(doc);
 
-    return {
-      url,
-      title,
-      description,
-      author,
-      publishedDate,
-      timestamp: new Date().toISOString(),
-      headings,
-      links,
-      wordCount,
-      contentType,
-    };
+      return {
+        url,
+        title,
+        description,
+        author,
+        publishedDate,
+        timestamp: new Date().toISOString(),
+        headings,
+        links,
+        wordCount,
+        contentType,
+      };
+    } finally {
+      dom.window.close();
+    }
   }
 
   private extractTitle(doc: Document): string {
