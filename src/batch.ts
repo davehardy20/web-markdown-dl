@@ -9,7 +9,7 @@ import { Converter } from './converter.js';
 import { ContentFilter } from './filter.js';
 import { MetadataExtractor } from './metadata.js';
 import { ScraperError, type ScrapingResult } from './types.js';
-import { sanitizeUrlForFilename, isPathSafe, PathSecurityError, fileExists } from './security.js';
+import { sanitizeUrlForFilename, isPathSafe, PathSecurityError, fileExists, validateUrlForSsrf } from './security.js';
 import { FileWriter } from './utils/file-writer.js';
 
 /**
@@ -32,6 +32,8 @@ export interface BatchOptions {
   filter?: boolean;
   /** Overwrite existing files without warning */
   overwrite?: boolean;
+  /** Allow internal network access (SSRF protection bypass) */
+  allowInternal?: boolean;
 }
 
 /**
@@ -44,6 +46,7 @@ export const DEFAULT_BATCH_OPTIONS: Required<Omit<BatchOptions, 'inputFile' | 'o
   userAgent: 'web-markdown-dl/1.0',
   filter: false,
   overwrite: false,
+  allowInternal: false,
 };
 
 /**
@@ -155,7 +158,15 @@ export class BatchProcessor {
       .filter(line => {
         try {
           const url = new URL(line);
-          return url.protocol === 'http:' || url.protocol === 'https:';
+          if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+            return false;
+          }
+          const ssrfCheck = validateUrlForSsrf(line, this.options.allowInternal);
+          if (!ssrfCheck.valid) {
+            console.error(`Warning: Skipping URL blocked by SSRF policy: ${line} - ${ssrfCheck.error}`);
+            return false;
+          }
+          return true;
         } catch {
           return false;
         }
