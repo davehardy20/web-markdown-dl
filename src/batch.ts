@@ -11,6 +11,7 @@ import { MetadataExtractor } from './metadata.js';
 import { ScraperError, type ScrapingResult } from './types.js';
 import { sanitizeUrlForFilename, isPathSafe, PathSecurityError, fileExists, validateUrlForSsrf } from './security.js';
 import { FileWriter } from './utils/file-writer.js';
+import { UrlProcessor } from './utils/url-processor.js';
 
 /**
  * Configuration options for batch processing
@@ -95,6 +96,11 @@ export class BatchProcessor {
   private progressCallback?: ProgressCallback;
   private errorCallback?: ErrorCallback;
   private scraper: Scraper;
+  private converter: Converter;
+  private filter: ContentFilter;
+  private metadataExtractor: MetadataExtractor;
+  private fileWriter: FileWriter;
+  private urlProcessor: UrlProcessor;
 
   constructor(options: BatchOptions) {
     this.options = {
@@ -105,6 +111,17 @@ export class BatchProcessor {
       timeout: this.options.timeout,
       userAgent: this.options.userAgent,
     });
+    this.converter = new Converter();
+    this.filter = new ContentFilter();
+    this.metadataExtractor = new MetadataExtractor();
+    this.fileWriter = new FileWriter(this.options.outputDir);
+    this.urlProcessor = new UrlProcessor(
+      this.scraper,
+      this.converter,
+      this.filter,
+      this.metadataExtractor,
+      this.fileWriter
+    );
   }
 
   /**
@@ -201,84 +218,26 @@ export class BatchProcessor {
    */
   private async processUrl(url: string): Promise<UrlResult> {
     try {
-      // Scrape the URL
-      const result = await this.scraper.scrape(url);
+      const result = await this.urlProcessor.process(url, {
+        filter: this.options.filter,
+        format: this.options.format,
+        outputDir: this.options.outputDir,
+        overwrite: this.options.overwrite,
+      });
 
-      let htmlToConvert = result.html;
-      let filterMetadata = { filtered: false, author: null as string | null };
-
-      // Apply content filtering if enabled
-      if (this.options.filter) {
-        const contentFilter = new ContentFilter();
-        const filterResult = contentFilter.filterWithFallback(result.html, result.url);
-        htmlToConvert = filterResult.html;
-        filterMetadata = {
-          filtered: filterResult.metadata.success,
-          author: filterResult.metadata.byline,
-        };
-
-        if (!filterResult.metadata.success) {
-          console.error(`Warning: Content filtering failed for ${url}, using raw HTML. ${filterResult.metadata.error}`);
-        }
-      }
-
-      // Convert to markdown
-      const converter = new Converter();
-      const markdown = converter.convert(htmlToConvert);
-
-      // Extract metadata
-      const metadataExtractor = new MetadataExtractor();
-      const metadata = metadataExtractor.extract(htmlToConvert, result.url, markdown);
-
-      // Add author from filter if not already set
-      if (filterMetadata.author && !metadata.author) {
-        metadata.author = filterMetadata.author;
-      }
-
-      // Generate output filename
-      const sanitizedUrl = this.sanitizeUrlForFilename(url);
-      const extension = this.options.format === 'json' ? 'json' : 'md';
-      const outputFilename = `${sanitizedUrl}.${extension}`;
-      const outputPath = `${this.options.outputDir}/${outputFilename}`;
-
-      // Validate output path is within output directory (prevent path traversal)
-      if (!isPathSafe(outputPath, this.options.outputDir)) {
-        throw new PathSecurityError(
-          `Path traversal detected: output path "${outputPath}" resolves outside the output directory`
-        );
-      }
-
-      // Prepare output content
-      let outputContent: string;
-      if (this.options.format === 'json') {
-        const scrapingResult: ScrapingResult = {
-          markdown,
-          metadata,
-        };
-        outputContent = JSON.stringify(scrapingResult, null, 2);
-      } else {
-        outputContent = markdown;
-      }
-
-      // Check if file exists and respect overwrite option
-      const exists = await fileExists(outputPath);
-      if (exists && !this.options.overwrite) {
-        console.error(`Skipping ${url}: file already exists (use --force to overwrite)`);
+      if (result.success) {
         return {
-          url,
+          url: result.url,
           success: true,
-          outputFile: outputPath,
+          outputFile: result.outputFile,
+        };
+      } else {
+        return {
+          url: result.url,
+          success: false,
+          error: result.error,
         };
       }
-
-      // Write output file
-      await writeFile(outputPath, outputContent, 'utf-8');
-
-      return {
-        url,
-        success: true,
-        outputFile: outputPath,
-      };
     } catch (error: unknown) {
       const errorMessage = error instanceof ScraperError
         ? error.message
