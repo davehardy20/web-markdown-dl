@@ -28,15 +28,40 @@ export interface ScraperOptions {
    * @default 'networkidle'
    */
   waitUntil?: WaitUntil;
+
+  /**
+   * Maximum number of retry attempts for transient failures
+   * @default 3
+   */
+  maxRetries?: number;
+
+  /**
+   * Base delay in milliseconds for exponential backoff
+   * @default 1000
+   */
+  retryBaseDelay?: number;
+
+  /**
+   * Maximum delay in milliseconds for exponential backoff
+   * @default 30000
+   */
+  retryMaxDelay?: number;
+
+  /**
+   * Enable jitter for retry delays to prevent thundering herd
+   * @default true
+   */
+  retryJitter?: boolean;
 }
 
-/**
- * Default scraper options
- */
 export const DEFAULT_SCRAPER_OPTIONS: Required<ScraperOptions> = {
   timeout: 30000,
   userAgent: 'web-markdown-dl/1.0',
   waitUntil: 'networkidle',
+  maxRetries: 3,
+  retryBaseDelay: 1000,
+  retryMaxDelay: 30000,
+  retryJitter: true,
 };
 
 /**
