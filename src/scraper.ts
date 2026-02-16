@@ -43,6 +43,7 @@ export class Scraper {
       retryMaxDelay: options.retryMaxDelay ?? DEFAULT_SCRAPER_OPTIONS.retryMaxDelay,
       retryJitter: options.retryJitter ?? DEFAULT_SCRAPER_OPTIONS.retryJitter,
       validateContentType: options.validateContentType ?? DEFAULT_SCRAPER_OPTIONS.validateContentType,
+      maxResponseSize: options.maxResponseSize ?? DEFAULT_SCRAPER_OPTIONS.maxResponseSize,
     };
   }
 
@@ -166,7 +167,23 @@ export class Scraper {
           }
         }
 
+        const contentLength = response.headers()['content-length'];
+        if (contentLength) {
+          const size = parseInt(contentLength, 10);
+          if (!isNaN(size) && size > this.options.maxResponseSize) {
+            throw ScraperError.fromResponseSizeExceeded(url, size, this.options.maxResponseSize);
+          }
+        }
+
         const html = await page.content();
+        
+        if (Buffer.byteLength(html, 'utf8') > this.options.maxResponseSize) {
+          throw ScraperError.fromResponseSizeExceeded(
+            url, 
+            Buffer.byteLength(html, 'utf8'), 
+            this.options.maxResponseSize
+          );
+        }
         const finalUrl = page.url();
         const title = await page.title();
 

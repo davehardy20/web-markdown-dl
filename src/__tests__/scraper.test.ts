@@ -11,7 +11,10 @@ class MockTimeoutError extends Error {
 
 mock.module('playwright', () => {
   const mockPage = {
-    goto: mock(() => Promise.resolve({ status: () => 200 })),
+    goto: mock(() => Promise.resolve({ 
+      status: () => 200,
+      headers: () => ({ 'content-length': '100' }),
+    })),
     content: mock(() => Promise.resolve('<html><body>Test</body></html>')),
     url: mock(() => 'https://example.com'),
     title: mock(() => Promise.resolve('Test Page')),

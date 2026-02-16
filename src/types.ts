@@ -58,6 +58,12 @@ export interface ScraperOptions {
    * @default false
    */
   validateContentType?: boolean;
+
+  /**
+   * Maximum allowed response size in bytes to prevent DoS from huge responses
+   * @default 52428800 (50MB)
+   */
+  maxResponseSize?: number;
 }
 
 export const DEFAULT_SCRAPER_OPTIONS: Required<ScraperOptions> = {
@@ -69,6 +75,7 @@ export const DEFAULT_SCRAPER_OPTIONS: Required<ScraperOptions> = {
   retryMaxDelay: 30000,
   retryJitter: true,
   validateContentType: false,
+  maxResponseSize: 50 * 1024 * 1024, // 50MB
 };
 
 /**
@@ -97,6 +104,7 @@ export type ScraperErrorType =
   | 'navigation'
   | 'browser'
   | 'invalid-content-type'
+  | 'response-size-exceeded'
   | 'unknown';
 
 /**
@@ -180,6 +188,17 @@ export class ScraperError extends Error {
       return new ScraperError(
         `Invalid content-type "${contentType}" for ${url}. Expected HTML content.`,
         'invalid-content-type',
+        url
+      );
+    }
+
+    /**
+     * Creates a ScraperError when response size exceeds limit
+     */
+    static fromResponseSizeExceeded(url: string, size: number, maxSize: number): ScraperError {
+      return new ScraperError(
+        `Response size ${size} bytes exceeds maximum ${maxSize} bytes for ${url}`,
+        'response-size-exceeded',
         url
       );
     }
