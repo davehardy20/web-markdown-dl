@@ -2,7 +2,7 @@
  * Depth-limited web crawler with domain restrictions and robots.txt support
  */
 
-import { writeFile, mkdir } from 'fs/promises';
+import { mkdir } from 'fs/promises';
 import { JSDOM } from 'jsdom';
 import robotsParser from 'robots-parser';
 import { Scraper } from './scraper.js';
@@ -11,6 +11,7 @@ import { ContentFilter } from './filter.js';
 import { MetadataExtractor } from './metadata.js';
 import { ScraperError, type Metadata, type ScrapingResult } from './types.js';
 import { sanitizeUrlForFilename, isPathSafe, PathSecurityError, fileExists } from './security.js';
+import { FileWriter } from './utils/file-writer.js';
 
 /**
  * Configuration options for the crawler
@@ -76,6 +77,8 @@ export interface CrawledPage {
   error?: string;
   /** Output file path (if saved) */
   outputFile?: string;
+  /** Raw HTML content (cached for link extraction, max 5MB) */
+  html?: string;
 }
 
 /**
@@ -336,6 +339,7 @@ export class Crawler {
 
   /**
    * Process a single URL: scrape, convert, and save
+   * Returns HTML for caching (max 5MB) to avoid double-scraping during link extraction
    */
   private async processUrl(url: string, depth: number): Promise<CrawledPage> {
     try {
@@ -373,14 +377,6 @@ export class Crawler {
 
       // Generate output filename
       const filename = this.generateFilename(url, depth);
-      const outputPath = `${this.options.outputDir}/${filename}`;
-
-      // Validate output path is within output directory (prevent path traversal)
-      if (!isPathSafe(outputPath, this.options.outputDir)) {
-        throw new PathSecurityError(
-          `Path traversal detected: output path "${outputPath}" resolves outside the output directory`
-        );
-      }
 
       // Prepare output content
       let outputContent: string;
@@ -394,29 +390,26 @@ export class Crawler {
         outputContent = markdown;
       }
 
-      // Check if file exists and respect overwrite option
-      const exists = await fileExists(outputPath);
-      if (exists && !this.options.overwrite) {
+      // Use FileWriter for file operations
+      const fileWriter = new FileWriter(this.options.outputDir);
+      const writeResult = await fileWriter.write(filename, outputContent, {
+        overwrite: this.options.overwrite,
+      });
+
+      if (writeResult.skipped) {
         console.error(`Skipping ${url}: file already exists (use --force to overwrite)`);
-        return {
-          url,
-          depth,
-          success: true,
-          outputFile: outputPath,
-        };
       }
 
-      // Write output file
-      await writeFile(outputPath, outputContent, 'utf-8');
-
-      // Extract links for further crawling
-      const links = extractLinks(result.html, result.url);
+      // Cache HTML for link extraction, but only if under 5MB (memory safety)
+      const MAX_CACHED_HTML_SIZE = 5 * 1024 * 1024; // 5MB
+      const shouldCacheHtml = result.html.length <= MAX_CACHED_HTML_SIZE;
 
       return {
         url,
         depth,
         success: true,
-        outputFile: outputPath,
+        outputFile: writeResult.path,
+        html: shouldCacheHtml ? result.html : undefined,
       };
     } catch (error: unknown) {
       const errorMessage = error instanceof ScraperError
@@ -496,11 +489,18 @@ export class Crawler {
 
         // Extract and queue new links if we haven't reached max depth
         if (depth < this.options.maxDepth && pageResult.outputFile) {
-          // Re-scrape to get links (we already have the HTML in the scraper result)
-          // We need to get the HTML from the scraper again since we didn't save it
           try {
-            const scrapeResult = await this.scraper.scrape(url);
-            const links = extractLinks(scrapeResult.html, url);
+            let links: string[] = [];
+
+            // Use cached HTML if available (avoids double-scraping)
+            // If HTML was too large (>5MB), it won't be cached and we need to rescrape
+            if (pageResult.html) {
+              links = extractLinks(pageResult.html, url);
+            } else {
+              // HTML was too large to cache, rescrape for link extraction
+              const scrapeResult = await this.scraper.scrape(url);
+              links = extractLinks(scrapeResult.html, url);
+            }
 
             for (const link of links) {
               const normalized = normalizeUrl(link);

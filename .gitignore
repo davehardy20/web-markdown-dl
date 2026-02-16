@@ -36,3 +36,7 @@ coverage/
 
 # Sisyphus
 .sisyphus/
+
+# Test output
+test-output/
+crawl-output/
