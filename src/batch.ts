@@ -323,11 +323,14 @@ export class BatchProcessor {
 
   /**
    * Process a single domain sequentially (maintains politeness)
+   * @param domain Domain name being processed
+   * @param urls List of URLs to process for this domain
+   * @param onUrlComplete Callback to invoke after each URL completes (for progress tracking)
    */
   private async processDomain(
     domain: string, 
     urls: string[], 
-    totalUrls: number
+    onUrlComplete?: (url: string) => void
   ): Promise<BatchSummary> {
     const summary: BatchSummary = {
       total: urls.length,
@@ -338,9 +341,6 @@ export class BatchProcessor {
 
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i]!;
-
-      // Report progress (current is tracked globally via closure in run())
-      // We'll handle progress callback differently for parallel processing
 
       // Process the URL
       const result = await this.processUrl(url);
@@ -358,6 +358,11 @@ export class BatchProcessor {
         if (this.errorCallback) {
           this.errorCallback(result.url, result.error || 'Unknown error');
         }
+      }
+
+      // Invoke progress callback after each URL completes (success or failure)
+      if (onUrlComplete) {
+        onUrlComplete(url);
       }
 
       // Add delay between URLs within the same domain (politeness)
@@ -412,23 +417,17 @@ export class BatchProcessor {
     // Convert to array for batch processing
     const domainEntries = Array.from(domainGroups.entries());
     
-    // Track overall progress
+    // Track overall progress with atomic counter for parallel processing
     let processedCount = 0;
     const totalUrlCount = urls.length;
     
-    // Create a wrapper for progress callback that tracks global progress
-    const originalProgressCallback = this.progressCallback;
-    const domainProgressCallbacks = new Map<string, ProgressCallback>();
-    
-    if (originalProgressCallback) {
-      // Create a per-domain progress tracker that calls the global callback
-      for (const [domain] of domainEntries) {
-        domainProgressCallbacks.set(domain, () => {
+    // Create progress callback wrapper that tracks global count
+    const onUrlComplete = this.progressCallback 
+      ? (url: string) => {
           processedCount++;
-          originalProgressCallback(processedCount, totalUrlCount, domain);
-        });
-      }
-    }
+          this.progressCallback!(processedCount, totalUrlCount, url);
+        }
+      : undefined;
 
     // Process domains with concurrency limit
     const MAX_CONCURRENT_DOMAINS = 5;
@@ -439,17 +438,7 @@ export class BatchProcessor {
       
       // Process batch of domains in parallel
       const batchPromises = batch.map(async ([domain, domainUrls]) => {
-        const result = await this.processDomain(domain, domainUrls, totalUrlCount);
-        
-        // Update progress for each URL in this domain
-        if (originalProgressCallback) {
-          for (let j = 0; j < domainUrls.length; j++) {
-            processedCount++;
-            originalProgressCallback(processedCount, totalUrlCount, domainUrls[j]!);
-          }
-        }
-        
-        return result;
+        return this.processDomain(domain, domainUrls, onUrlComplete);
       });
 
       const batchResults = await Promise.all(batchPromises);
