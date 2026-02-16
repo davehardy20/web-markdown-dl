@@ -8,6 +8,19 @@ import {
 } from './types.js';
 import { withRetry, RetryableError } from './utils/retry.js';
 
+function isValidContentType(contentType: string | null | undefined): boolean {
+  if (contentType == null || contentType === '') {
+    return true;
+  }
+  const parts = contentType.toLowerCase().split(';');
+  const normalizedType = (parts[0] ?? '').trim();
+  if (normalizedType.startsWith('text/')) {
+    return true;
+  }
+  const validTypes = ['text/html', 'application/xhtml+xml'];
+  return validTypes.includes(normalizedType);
+}
+
 export class Scraper {
   private options: Required<ScraperOptions>;
   private browser: Browser | null = null;
@@ -21,6 +34,7 @@ export class Scraper {
       retryBaseDelay: options.retryBaseDelay ?? DEFAULT_SCRAPER_OPTIONS.retryBaseDelay,
       retryMaxDelay: options.retryMaxDelay ?? DEFAULT_SCRAPER_OPTIONS.retryMaxDelay,
       retryJitter: options.retryJitter ?? DEFAULT_SCRAPER_OPTIONS.retryJitter,
+      validateContentType: options.validateContentType ?? DEFAULT_SCRAPER_OPTIONS.validateContentType,
     };
   }
 
@@ -77,6 +91,13 @@ export class Scraper {
           const error = new Error(`HTTP ${statusCode}`) as RetryableError;
           error.statusCode = statusCode;
           throw error;
+        }
+
+        if (this.options.validateContentType) {
+          const contentType = response.headers()['content-type'];
+          if (!isValidContentType(contentType)) {
+            throw ScraperError.fromContentTypeError(contentType || 'unknown', url);
+          }
         }
 
         const html = await page.content();

@@ -27,6 +27,7 @@ export interface CliOptions {
   allowExternal?: boolean;
   allowInternal?: boolean;
   overwrite?: boolean;
+  validateContentType?: boolean;
 }
 
 export interface CliResult {
@@ -246,6 +247,7 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
   const scraper = new Scraper({
     timeout: options.timeout,
     userAgent: options.userAgent,
+    validateContentType: options.validateContentType,
   });
 
   try {
@@ -354,6 +356,7 @@ export function createProgram(): Command {
     .option('--allow-external', 'Allow crawling external domains')
     .option('--allow-internal', 'Allow access to internal IPs and localhost (SSRF risk)')
     .option('--force', 'Overwrite existing files without warning')
+    .option('--validate-content-type', 'Validate response content-type is HTML (reject JSON, images, binary)')
     .action(async (options) => {
       const cliOptions: CliOptions = {
         url: options.url,
@@ -372,6 +375,7 @@ export function createProgram(): Command {
         allowExternal: options.allowExternal ?? false,
         allowInternal: options.allowInternal ?? false,
         overwrite: options.force ?? false,
+        validateContentType: options.validateContentType ?? false,
       };
 
       if (cliOptions.format !== 'markdown' && cliOptions.format !== 'json') {

@@ -52,6 +52,12 @@ export interface ScraperOptions {
    * @default true
    */
   retryJitter?: boolean;
+
+  /**
+   * Enable content-type validation to reject non-HTML responses
+   * @default false
+   */
+  validateContentType?: boolean;
 }
 
 export const DEFAULT_SCRAPER_OPTIONS: Required<ScraperOptions> = {
@@ -62,6 +68,7 @@ export const DEFAULT_SCRAPER_OPTIONS: Required<ScraperOptions> = {
   retryBaseDelay: 1000,
   retryMaxDelay: 30000,
   retryJitter: true,
+  validateContentType: false,
 };
 
 /**
@@ -89,6 +96,7 @@ export type ScraperErrorType =
   | 'network'
   | 'navigation'
   | 'browser'
+  | 'invalid-content-type'
   | 'unknown';
 
 /**
@@ -153,18 +161,29 @@ export class ScraperError extends Error {
     );
   }
 
-  /**
-    * Creates a ScraperError from a browser-related error
-    */
-  static fromBrowserError(error: Error): ScraperError {
-    return new ScraperError(
-      `Browser error: ${error.message}`,
-      'browser',
-      undefined,
-      error
-    );
+    /**
+     * Creates a ScraperError from a browser-related error
+     */
+    static fromBrowserError(error: Error): ScraperError {
+      return new ScraperError(
+        `Browser error: ${error.message}`,
+        'browser',
+        undefined,
+        error
+      );
+    }
+
+    /**
+     * Creates a ScraperError from an invalid content-type response
+     */
+    static fromContentTypeError(contentType: string, url: string): ScraperError {
+      return new ScraperError(
+        `Invalid content-type "${contentType}" for ${url}. Expected HTML content.`,
+        'invalid-content-type',
+        url
+      );
+    }
   }
-}
 
 /**
  * Filter configuration options

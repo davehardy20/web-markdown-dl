@@ -105,6 +105,8 @@ describe('runCli', () => {
     url: 'https://example.com',
     format: 'markdown',
     timeout: 30000,
+    filter: false,
+    delay: 1000,
   };
 
   it('should return error when URL is missing', async () => {
@@ -163,5 +165,25 @@ describe('runCli', () => {
     expect(parsed.metadata.links).toBeDefined();
     expect(parsed.metadata.wordCount).toBeDefined();
     expect(parsed.metadata.contentType).toBeDefined();
+  });
+
+  it('should accept validateContentType option as false by default', async () => {
+    const result = await runCli({
+      ...defaultOptions,
+      validateContentType: false,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should accept validateContentType option as true', async () => {
+    const result = await runCli({
+      ...defaultOptions,
+      validateContentType: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.exitCode).toBe(0);
   });
 });
