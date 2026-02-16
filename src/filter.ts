@@ -59,11 +59,8 @@ export class ContentFilter {
       };
     }
 
+    const dom = new JSDOM(html, { url });
     try {
-      // Create a JSDOM instance with the URL for proper link resolution
-      const dom = new JSDOM(html, { url });
-
-      // Create Readability instance and parse
       const reader = new Readability(dom.window.document, {
         charThreshold: this.options.charThreshold,
         debug: this.options.debug,
@@ -72,7 +69,6 @@ export class ContentFilter {
       const article = reader.parse();
 
       if (!article) {
-        // Readability couldn't parse - return failure with fallback indication
         return {
           content: null,
           title: null,
@@ -89,7 +85,6 @@ export class ContentFilter {
         };
       }
 
-      // Successfully parsed - return filtered content
       return {
         content: article.content ?? null,
         title: article.title ?? null,
@@ -120,6 +115,8 @@ export class ContentFilter {
         success: false,
         error: `Filter error: ${err.message}`,
       };
+    } finally {
+      dom.window.close();
     }
   }
 

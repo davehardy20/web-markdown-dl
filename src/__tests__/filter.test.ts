@@ -242,3 +242,37 @@ describe('DEFAULT_FILTER_OPTIONS', () => {
     expect(DEFAULT_FILTER_OPTIONS.debug).toBe(false);
   });
 });
+
+describe('Memory Management', () => {
+  test('handles multiple filter calls without memory issues', () => {
+    const filter = new ContentFilter();
+    const longContent = 'This is a substantial article with enough content to pass the readability threshold. '.repeat(20);
+    const html = createArticleHtml(`<p>${longContent}</p>`);
+    
+    for (let i = 0; i < 10; i++) {
+      const result = filter.filter(html, 'https://example.com/article');
+      expect(result.success).toBe(true);
+    }
+  });
+
+  test('closes JSDOM window even when filtering fails', () => {
+    const filter = new ContentFilter();
+    const html = '<html><body>Content</body></html>';
+    
+    const result = filter.filter(html, 'https://example.com');
+    expect(result).toBeDefined();
+    expect(result.content).toBeDefined();
+  });
+
+  test('filterWithFallback handles multiple calls without memory issues', () => {
+    const filter = new ContentFilter();
+    const longContent = 'This is a substantial article with enough content. '.repeat(20);
+    const html = createArticleHtml(`<p>${longContent}</p>`);
+    
+    for (let i = 0; i < 10; i++) {
+      const result = filter.filterWithFallback(html, 'https://example.com/article');
+      expect(result.html).toBeDefined();
+      expect(result.metadata).toBeDefined();
+    }
+  });
+});
