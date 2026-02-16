@@ -14,8 +14,9 @@ Convert web pages to clean, structured Markdown format.
 
 ## Prerequisites
 
-- The CLI binary must be built at `./bin/web-markdown-dl` (relative to project root)
-- Run `bun run build` first if not already built
+- The CLI binary is bundled with the skill at `bin/web-markdown-dl`
+- The binary requires the project to be built at `/Users/dave/tools/web_markdown_dl/`
+- Run `bun run build` in the project directory if not already built
 
 ## Capabilities
 
@@ -25,6 +26,8 @@ Convert a single web page to Markdown:
 
 ```bash
 ./bin/web-markdown-dl --url "https://example.com/article"
+# Or using the skill binary directly:
+~/.config/opencode/skills/web-markdown-dl/bin/web-markdown-dl --url "https://example.com/article"
 ```
 
 Options:
@@ -40,6 +43,8 @@ Process multiple URLs from a file:
 
 ```bash
 ./bin/web-markdown-dl --input-file urls.txt --output-dir ./output
+# Or using the skill binary directly:
+~/.config/opencode/skills/web-markdown-dl/bin/web-markdown-dl --input-file urls.txt --output-dir ./output
 ```
 
 Input file format (one URL per line):
@@ -59,6 +64,8 @@ Crawl a website recursively:
 
 ```bash
 ./bin/web-markdown-dl --url "https://example.com" --crawl --output-dir ./crawled
+# Or using the skill binary directly:
+~/.config/opencode/skills/web-markdown-dl/bin/web-markdown-dl --url "https://example.com" --crawl --output-dir ./crawled
 ```
 
 Options:
@@ -115,6 +122,8 @@ With `--format json`, returns structured data:
 
 ```bash
 ./bin/web-markdown-dl --url "https://blog.example.com/post" --filter
+# Or using the skill binary directly:
+~/.config/opencode/skills/web-markdown-dl/bin/web-markdown-dl --url "https://blog.example.com/post" --filter
 ```
 
 ### Batch Download Documentation
@@ -122,18 +131,24 @@ With `--format json`, returns structured data:
 ```bash
 # Create urls.txt with doc URLs
 ./bin/web-markdown-dl --input-file urls.txt --output-dir ./docs --delay 500
+# Or using the skill binary directly:
+~/.config/opencode/skills/web-markdown-dl/bin/web-markdown-dl --input-file urls.txt --output-dir ./docs --delay 500
 ```
 
 ### Crawl API Reference
 
 ```bash
 ./bin/web-markdown-dl --url "https://api.example.com/docs" --crawl --output-dir ./api-docs --max-depth 3
+# Or using the skill binary directly:
+~/.config/opencode/skills/web-markdown-dl/bin/web-markdown-dl --url "https://api.example.com/docs" --crawl --output-dir ./api-docs --max-depth 3
 ```
 
 ### Get Structured Data
 
 ```bash
 ./bin/web-markdown-dl --url "https://example.com" --format json --output page.json
+# Or using the skill binary directly:
+~/.config/opencode/skills/web-markdown-dl/bin/web-markdown-dl --url "https://example.com" --format json --output page.json
 ```
 
 ## Error Handling

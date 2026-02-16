@@ -2,12 +2,11 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../../.." && pwd)"
-CLI="$PROJECT_ROOT/bin/web-markdown-dl"
+CLI="$SCRIPT_DIR/../bin/web-markdown-dl"
 
 if [[ ! -x "$CLI" ]]; then
     echo "Error: CLI not found at $CLI" >&2
-    echo "Run 'bun run build' in the project root first." >&2
+    echo "Binary should be at ~/.config/opencode/skills/web-markdown-dl/bin/web-markdown-dl" >&2
     exit 1
 fi
 
@@ -72,7 +71,7 @@ case "$COMMAND" in
         echo "  $0 batch --input-file urls.txt --output-dir ./output"
         echo "  $0 crawl --url https://example.com --output-dir ./crawled --max-depth 3"
         echo ""
-        echo "Run '$CLI --help' for all CLI options."
+        echo "Run '$0 --help' or '$CLI --help' for all CLI options."
         ;;
     
     *)
