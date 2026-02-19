@@ -64,6 +64,18 @@ export interface ScraperOptions {
    * @default 52428800 (50MB)
    */
   maxResponseSize?: number;
+
+  /**
+   * Enable verbose logging for debugging
+   * @default false
+   */
+  verbose?: boolean;
+
+  /**
+   * Path to log file for verbose output (empty string = no file logging)
+   * @default ''
+   */
+  logFile?: string;
 }
 
 export const DEFAULT_SCRAPER_OPTIONS: Required<ScraperOptions> = {
@@ -76,6 +88,8 @@ export const DEFAULT_SCRAPER_OPTIONS: Required<ScraperOptions> = {
   retryJitter: true,
   validateContentType: false,
   maxResponseSize: 50 * 1024 * 1024, // 50MB
+  verbose: false,
+  logFile: '',
 };
 
 /**

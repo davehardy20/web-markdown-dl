@@ -28,6 +28,8 @@ export interface CliOptions {
   allowInternal?: boolean;
   overwrite?: boolean;
   validateContentType?: boolean;
+  verbose: boolean;
+  logFile?: string;
 }
 
 export interface CliResult {
@@ -248,6 +250,8 @@ export async function runCli(options: CliOptions): Promise<CliResult> {
     timeout: options.timeout,
     userAgent: options.userAgent,
     validateContentType: options.validateContentType,
+    verbose: options.verbose,
+    logFile: options.logFile,
   });
 
   try {
@@ -357,6 +361,8 @@ export function createProgram(): Command {
     .option('--allow-internal', 'Allow access to internal IPs and localhost (SSRF risk)')
     .option('--force', 'Overwrite existing files without warning')
     .option('--validate-content-type', 'Validate response content-type is HTML (reject JSON, images, binary)')
+    .option('-v, --verbose', 'Enable verbose output')
+    .option('--log-file <path>', 'Path to log file for verbose output')
     .action(async (options) => {
       const cliOptions: CliOptions = {
         url: options.url,
@@ -376,6 +382,8 @@ export function createProgram(): Command {
         allowInternal: options.allowInternal ?? false,
         overwrite: options.force ?? false,
         validateContentType: options.validateContentType ?? false,
+        verbose: options.verbose ?? false,
+        logFile: options.logFile,
       };
 
       if (cliOptions.format !== 'markdown' && cliOptions.format !== 'json') {
